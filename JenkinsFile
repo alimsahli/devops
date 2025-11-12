@@ -2,15 +2,6 @@ pipeline {
     agent any
 
     stages {
-        stage('GIT') {
-            steps {
-                git branch: 'main',
-                changelog: false,
-                credentialsId: 'jenkins-github-https-cred',
-                url: 'https://github.com/alimsahli/devops.git'
-            }
-        }
-
 
         stage('MAVEN Build & Test'){
             steps {
