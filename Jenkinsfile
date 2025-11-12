@@ -9,7 +9,7 @@ pipeline {
                 sh 'mvn clean install'
             }
         }
-        
+
         stage('SECRET SCAN (Gitleaks via Docker)') {
             steps {
                 // Utilise $WORKSPACE au lieu de $PWD ou du chemin codé en dur
