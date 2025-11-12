@@ -112,30 +112,29 @@ pipeline {
              //}
         //}
 
-        // --- Add the Post-Build Notification Section ---
-        post {
-            always {
-                // This runs after the pipeline completes, regardless of success or failure.
-                echo 'Pipeline finished. Checking status for email...'
-            }
-            success {
-                // This runs only if the pipeline finished with success.
-                mail(
-                    to: 'alimsahli.si@gmail.com',
-                    subject: "✅ SUCCESS: Pipeline ${env.JOB_NAME} - Build #${env.BUILD_NUMBER}",
-                    body: "The build for ${env.JOB_NAME} completed successfully.\nView details here: ${env.BUILD_URL}"
-                )
-            }
-            failure {
-                // This runs only if the pipeline failed.
-                mail(
-                    to: 'alimsahli.si@gmail.com', // Multiple recipients separated by comma
-                    subject: "❌ FAILURE: Pipeline ${env.JOB_NAME} - Build #${env.BUILD_NUMBER}",
-                    body: "The build failed! Please check the console output.\nView details here: ${env.BUILD_URL}"
-                )
-            }
-            // You can also use 'unstable', 'fixed', 'aborted', etc.
-        }
-
     }
+    post {
+        always {
+            // This runs after the pipeline completes, regardless of success or failure.
+            echo 'Pipeline finished. Checking status for email...'
+        }
+        success {
+            // This runs only if the pipeline finished with success.
+            mail(
+                to: 'alimsahli.si@gmail.com',
+                subject: "✅ SUCCESS: Pipeline ${env.JOB_NAME} - Build #${env.BUILD_NUMBER}",
+                body: "The build for ${env.JOB_NAME} completed successfully.\nView details here: ${env.BUILD_URL}"
+            )
+        }
+        failure {
+            // This runs only if the pipeline failed.
+            mail(
+                to: 'alimsahli.si@gmail.com', // Multiple recipients separated by comma
+                subject: "❌ FAILURE: Pipeline ${env.JOB_NAME} - Build #${env.BUILD_NUMBER}",
+                body: "The build failed! Please check the console output.\nView details here: ${env.BUILD_URL}"
+            )
+        }
+        // You can also use 'unstable', 'fixed', 'aborted', etc.
+    }
+
 }
