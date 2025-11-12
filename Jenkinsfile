@@ -95,7 +95,8 @@ pipeline {
                 }
             }
         }
-        stage{
+
+        stage('image creation'){
             steps{
                 sh 'docker build -t alimsahlibw/devops .'
                 sh 'docker image prune -f'
@@ -110,7 +111,5 @@ pipeline {
                  }
              }
         }
-
-
     }
 }
