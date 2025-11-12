@@ -98,17 +98,17 @@ pipeline {
 
         stage('image creation'){
             steps{
-                sh 'docker build -t alimsahlibw/devops .'
-                sh 'docker image prune -f'
+                //sh 'docker build -t alimsahlibw/devops .'
+                //sh 'docker image prune -f'
             }
         }
 
         stage('Docker Hub Push') {
              steps {
-                 withCredentials([string(credentialsId: 'dockerhub', variable: 'DOCKERHUB_TOKEN')]) {
-                     sh 'echo $DOCKERHUB_TOKEN | docker login -u alimsahlibw --password-stdin'
-                     sh 'docker push alimsahlibw/devops'
-                 }
+                 //withCredentials([string(credentialsId: 'dockerhub', variable: 'DOCKERHUB_TOKEN')]) {
+                     //sh 'echo $DOCKERHUB_TOKEN | docker login -u alimsahlibw --password-stdin'
+                     //sh 'docker push alimsahlibw/devops'
+                 //}
              }
         }
     }
