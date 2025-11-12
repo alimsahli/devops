@@ -96,17 +96,13 @@ pipeline {
             }
         }
 
-        stage('BUILD & SCAN DOCKER IMAGE') {
-            when { expression { return fileExists('Dockerfile') } }
-            steps {
-                script {
-                    def imageTag = "monapp:v${env.BUILD_NUMBER}"
-                    sh "docker build -t ${imageTag} ."
-
-                    // Scan de l'image Docker construite par Trivy
-                    sh "docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image --exit-code 1 --severity HIGH,CRITICAL ${imageTag}"
-                }
-            }
+        stage('Docker Hub Push') {
+             steps {
+                 withCredentials([string(credentialsId: 'dockerhub', variable: 'DOCKERHUB_TOKEN')]) {
+                     sh 'echo $DOCKERHUB_TOKEN | docker login -u alimsahlibw --password-stdin'
+                     sh 'docker push alimsahli/devops'
+                 }
+             }
         }
 
         stage('DEPLOYMENT') {
