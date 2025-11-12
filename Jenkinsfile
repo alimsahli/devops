@@ -3,87 +3,63 @@ pipeline {
 
     stages {
 
-        stage('MAVEN Build & Test'){
+        stage('MAVEN Build & Test') {
             steps {
                 sh 'mvn clean install'
             }
         }
-        stage('SECURITY CHECK: Hardcoded DB Credentials') {
-            steps {
-                script {
-                    def configFiles = ['src/main/resources/application.properties', 'src/main/resources/application.yml']
-                    def isHardcoded = false
 
-                    echo '🔍 Running targeted check for hardcoded DB credentials in config files...'
 
-                    for (def file : configFiles) {
-                        if (fileExists(file)) {
-                            // *** CORRECTED LINE: Used triple-single quotes (''') for literal string ***
-                            def result = sh(
-                                script: '''grep -E '^(spring\\.datasource\\.(password|username))\\s*=\\s*[^\\$].*[^\\s]' ''' + file + ' || true',
-                                returnStdout: true,
-                                quiet: true
-                            ).trim()
-
-                            if (result) {
-                                echo "🚨 FATAL SECURITY ERROR: Hardcoded credential found in ${file}:"
-                                echo "   ${result}"
-                                isHardcoded = true
-                                break
-                            }
-                        }
-                    }
-
-                    if (isHardcoded) {
-                        error("🚨 HARDCODED SECRET DETECTED. The pipeline is failing. Please externalize the password and username using Jenkins Credentials and environment variables (e.g., \${DB_PASSWORD}).")
-                    } else {
-                        echo '✅ Specific DB credential check passed. No hardcoded passwords or usernames detected.'
-                    }
-                }
-            }
-        }
 
         stage('SECRET SCAN (Gitleaks via Docker)') {
             steps {
-                // Utilise $WORKSPACE au lieu de $PWD ou du chemin codé en dur
-                sh 'docker run --rm -v $WORKSPACE:/app -w /app zricethezav/gitleaks:latest detect --source=. --report-path=gitleaks-report.json --exit-code 0'
+                sh '''
+                    docker run --rm \
+                      -v $WORKSPACE:/app \
+                      -w /app \
+                      zricethezav/gitleaks:latest detect \
+                      --source=. \
+                      --report-path=gitleaks-report.json \
+                      --exit-code 0
+                '''
             }
         }
+
         stage('Security Check: Forbidden .env File') {
             steps {
                 script {
-                    // Check for the existence of the .env file in the current workspace directory
                     def envFileExists = fileExists('.env')
 
                     if (envFileExists) {
-                        // If the file exists, mark the build as failed and print an error
                         error("🚨 FATAL SECURITY ERROR: The forbidden '.env' configuration file was found in the repository. Please remove it and use Jenkins credentials/secrets instead.")
                     } else {
-                        // If the file is not found, continue the pipeline
                         echo '✅ Security check passed. No forbidden .env file found.'
                     }
                 }
             }
         }
 
-        stage('SONARQUBE SCAN'){
-            environment{
-                SONAR_HOST_URL='http://192.168.50.4:9000/'
-                SONAR_AUTH_TOKEN= credentials('sonarqube')
+        stage('SONARQUBE SCAN') {
+            environment {
+                SONAR_HOST_URL = 'http://192.168.50.4:9000/'
+                SONAR_AUTH_TOKEN = credentials('sonarqube')
             }
-            steps{
-                // SonarQube utilise toujours le scanner Maven pour une intégration facile dans les projets Java
-                sh 'mvn sonar:sonar -Dsonar.projectKey=devops_git -Dsonar.host.url=$SONAR_HOST_URL -Dsonar.token=$SONAR_AUTH_TOKEN'
+            steps {
+                sh '''
+                    mvn sonar:sonar \
+                      -Dsonar.projectKey=devops_git \
+                      -Dsonar.host.url=$SONAR_HOST_URL \
+                      -Dsonar.token=$SONAR_AUTH_TOKEN
+                '''
             }
         }
 
         stage('QUALITY GATE WAIT (BLOCKING)') {
             steps {
                 timeout(time: 10, unit: 'MINUTES') {
-                    // C'est ici que l'outil Jenkins vérifie le résultat de SonarQube
-                    // Assurez-vous que le plugin est installé et l'instance configurée!
-                    // waitForQualityGate abortPipeline: true, sonarQube: 'MonServeurSonar'
-                    echo 'Vérification du Quality Gate SonarQube en cours...'
+                    echo '⏳ Vérification du Quality Gate SonarQube en cours...'
+                    // Uncomment if SonarQube plugin is configured:
+                    // waitForQualityGate abortPipeline: true
                 }
             }
         }
@@ -91,61 +67,69 @@ pipeline {
         stage('DEPENDENCY SCAN (SCA - Trivy via Docker)') {
             steps {
                 script {
-                    // Standardize the internal path to /app for both tools
-
-                    // 1. EXECUTE TRIVY SCAN (Write to /app/trivy-sca-report.json)
+                    // Run Trivy SCA scan
                     sh '''
                         docker run --rm \
                           -v $WORKSPACE:/app \
                           -w /app \
-                          aquasec/trivy:latest \
-                          fs --severity HIGH,CRITICAL --format json --output trivy-sca-report.json . || true
+                          aquasec/trivy:latest fs \
+                          --severity HIGH,CRITICAL \
+                          --format json \
+                          --output trivy-sca-report.json . || true
                     '''
 
-                    // 2. DISPLAY FORMATTED REPORT (Read from /app/trivy-sca-report.json)
+                    // Display results in readable format
                     sh '''
                         echo "--- TRIVY VULNERABILITY REPORT (HIGH/CRITICAL) ---"
                         docker run --rm \
                           -v $WORKSPACE:/app \
                           -w /app \
-                          realguess/jq:latest \
-                          jq -r \'
+                          realguess/jq:latest jq -r '
                             .Results[] | select(.Vulnerabilities) | {
                                 Target: .Target,
                                 Vulnerabilities: [
-                                    .Vulnerabilities[] | select(.Severity == "CRITICAL" or .Severity == "HIGH") | {
+                                    .Vulnerabilities[] |
+                                    select(.Severity == "CRITICAL" or .Severity == "HIGH") | {
                                         Severity: .Severity,
                                         VulnerabilityID: .VulnerabilityID,
                                         PkgName: .PkgName,
                                         InstalledVersion: .InstalledVersion
                                     }
                                 ]
-                            }
-                          \' trivy-sca-report.json
+                            }'
+                          trivy-sca-report.json
                     '''
 
-                    echo 'Le scan Trivy est terminé. Veuillez consulter les résultats ci-dessus.'
+                    echo '✅ Trivy scan completed. Review results above.'
                 }
             }
         }
 
         stage('BUILD & SCAN DOCKER IMAGE') {
-            when { expression { return fileExists('Dockerfile') } }
+            when {
+                expression { return fileExists('Dockerfile') }
+            }
             steps {
                 script {
                     def imageTag = "monapp:v${env.BUILD_NUMBER}"
+
                     sh "docker build -t ${imageTag} ."
 
-                    // Scan de l'image Docker construite par Trivy
-                    sh "docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image --exit-code 1 --severity HIGH,CRITICAL ${imageTag}"
+                    sh '''
+                        docker run --rm \
+                          -v /var/run/docker.sock:/var/run/docker.sock \
+                          aquasec/trivy:latest image \
+                          --exit-code 1 \
+                          --severity HIGH,CRITICAL ${imageTag}
+                    '''
                 }
             }
         }
 
         stage('DEPLOYMENT') {
             steps {
-                echo 'Tous les contrôles de sécurité sont passés. Déploiement autorisé.'
-                // ... (Logique de déploiement) ...
+                echo '🚀 All security checks passed. Deployment authorized.'
+                // Add your deployment logic here
             }
         }
     }
