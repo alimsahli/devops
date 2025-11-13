@@ -113,35 +113,68 @@ pipeline {
         //}
 
     }
-    post {
-        always {
-            archiveArtifacts artifacts: 'trivy_repo_report.json', allowEmptyArchive: true,
-            archiveArtifacts artifacts: 'gitleaks-report.json', allowEmptyArchive: true
-        }
-        success {
+   post {
+       always {
+           // Archive both the Trivy and Gitleaks reports
+           archiveArtifacts artifacts: 'trivy_repo_report.json, gitleaks_report.json', allowEmptyArchive: true
+       }
+       success {
+           emailext(
+                   subject: "✅ SUCCESS: Pipeline Completed for ${currentBuild.fullDisplayName}",
+                   body: """<!DOCTYPE html>
+                       <html lang="en">
+                       <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                           <div style="max-width: 650px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 8px; padding: 25px; background-color: #f9f9f9;">
+                               <h2 style="color: #28a745; margin-top: 0;">✅ Pipeline Success!</h2>
+                               <p>The build <strong>${currentBuild.fullDisplayName}</strong> completed successfully and passed all security checks.</p>
+                       
+                               <h3 style="color: #444; border-bottom: 2px solid #28a745; padding-bottom: 5px;">Key Checks Status:</h3>
+                               <ul style="list-style-type: none; padding-left: 0;">
+                                   <li style="margin-bottom: 8px;">🟢 <strong>Trivy Scan:</strong> Repository vulnerability scan completed with acceptable findings.</li>
+                                   <li>🟢 <strong>Gitleaks Scan:</strong> No sensitive secrets were detected in the codebase.</li>
+                               </ul>
+                       
+                               <p style="margin-top: 20px; font-size: 0.9em; color: #666;">
+                                   Reports are archived in the build artifacts for review.
+                               </p>
+                               <p style="margin-top: 20px;">Best regards,<br>The CI/CD System</p>
+                           </div>
+                       </body>
+                       </html>""",
+                   to: "alimsahli.si@gmail.com"
+               )
+       }
 
-            emailext(
-                    subject: "✅ Pipeline SUCCESS: ${currentBuild.fullDisplayName}",
-                    body: """Hello Team,
-                    The pipeline **completed successfully**!
-                    """,
-                    to: "alimsahli.si@gmail.com"
-                )
-        }
 
+       failure {
+           emailext(
+                   subject: "❌ FAILED: Pipeline Failed for ${currentBuild.fullDisplayName}",
+                   body: """<!DOCTYPE html>
+                       <html lang="en">
+                       <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                           <div style="max-width: 650px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 8px; padding: 25px; background-color: #fff3f3; border-left: 5px solid #dc3545;">
+                               <h2 style="color: #dc3545; margin-top: 0;">❌ Pipeline Failure!</h2>
+                               <p>The build <strong>${currentBuild.fullDisplayName}</strong> failed.</p>
+                               <p>A critical issue was detected during the execution. Please find the security reports attached for immediate review:</p>
+                       
+                               <h3 style="color: #444; border-bottom: 2px solid #dc3545; padding-bottom: 5px;">Attached Reports:</h3>
+                               <ul style="padding-left: 20px;">
+                                   <li><strong style="color: #b00;">trivy_repo_report.json</strong> (Vulnerability/Misconfiguration Details)</li>
+                                   <li><strong style="color: #b00;">gitleaks_report.json</strong> (Potential Secrets Detected)</li>
+                               </ul>
+                       
+                               <p style="margin-top: 20px; font-size: 0.9em; color: #666;">
+                                   Review the build console output for detailed logs and steps to reproduce the failure.
+                               </p>
+                               <p style="margin-top: 20px;">Best regards,<br>The CI/CD System</p>
+                           </div>
+                       </body>
+                       </html>""",
+                   to: "alimsahli.si@gmail.com",
 
-        failure {
-            emailext(
-                    subject: "❌ Pipeline FAILED: ${currentBuild.fullDisplayName}",
-                    body: """Hello Team,
-                    The pipeline failed. Check the attached Trivy report for details.
-                    """,
-                    to: "alimsahli.si@gmail.com",
-
-                    // Attach the file using its name relative to the current workspace root.
-                    // This is the most reliable way.
-                    attachmentsPattern: 'trivy_repo_report.json'
-                )
-        }
-    }
+                   // Attach both files
+                   attachmentsPattern: 'trivy_repo_report.json, gitleaks_report.json'
+               )
+       }
+   }
 }
