@@ -55,49 +55,43 @@ pipeline {
             }
         }
 
-        stage('Dependency Scan (SCA - Trivy via Docker)') {
+        stage('DEPENDENCY SCAN (SCA - Trivy via Docker)') {
             steps {
                 script {
-                    // 1. Setup Cache Directory
-                    sh 'mkdir -p $WORKSPACE/.trivy-cache'
+                    // Standardize the internal path to /app for both tools
 
-                    // 2. Run Trivy SCA Scan - FIX APPLIED HERE
+                    // 1. EXECUTE TRIVY SCAN (Write to /app/trivy-sca-report.json)
                     sh '''
-                docker run --rm \
-                    -v $WORKSPACE:/app \
-                    -v $WORKSPACE/.trivy-cache:/root/.cache/ \
-                    -w /app \
-                    aquasec/trivy:latest \
-                    fs --severity HIGH,CRITICAL \
-                    --format json \
-                    --output trivy-sca-report.json . || true
-            '''
+                        docker run --rm \
+                          -v $WORKSPACE:/app \
+                          -w /app \
+                          aquasec/trivy:latest \
+                          fs --severity HIGH,CRITICAL --format json --output trivy-sca-report.json . || true
+                    '''
 
-                    // 3. Display formatted vulnerability report
+                    // 2. DISPLAY FORMATTED REPORT (Read from /app/trivy-sca-report.json)
                     sh '''
-                echo "--- TRIVY VULNERABILITY REPORT (HIGH/CRITICAL) ---"
-                docker run --rm \
-                    -v $WORKSPACE:/app \
-                    -w /app \
-                    realguess/jq:latest \
-                    jq -r '
-                        .Results[] | select(.Vulnerabilities) | {
-                            Target: .Target,
-                            Vulnerabilities: [
-                                .Vulnerabilities[]
-                                | select(.Severity == "CRITICAL" or .Severity == "HIGH")
-                                | {
-                                    Severity: .Severity,
-                                    VulnerabilityID: .VulnerabilityID,
-                                    PkgName: .PkgName,
-                                    InstalledVersion: .InstalledVersion
-                                }
-                            ]
-                        }
-                    ' trivy-sca-report.json
-            '''
+                        echo "--- TRIVY VULNERABILITY REPORT (HIGH/CRITICAL) ---"
+                        docker run --rm \
+                          -v $WORKSPACE:/app \
+                          -w /app \
+                          realguess/jq:latest \
+                          jq -r \'
+                            .Results[] | select(.Vulnerabilities) | {
+                                Target: .Target,
+                                Vulnerabilities: [
+                                    .Vulnerabilities[] | select(.Severity == "CRITICAL" or .Severity == "HIGH") | {
+                                        Severity: .Severity,
+                                        VulnerabilityID: .VulnerabilityID,
+                                        PkgName: .PkgName,
+                                        InstalledVersion: .InstalledVersion
+                                    }
+                                ]
+                            }
+                          \' trivy-sca-report.json
+                    '''
 
-                    echo '✅ Trivy SCA scan completed. Check the results above.'
+                    echo 'Le scan Trivy est terminé. Veuillez consulter les résultats ci-dessus.'
                 }
             }
         }
@@ -121,7 +115,7 @@ pipeline {
     }
     post {
         always {
-            archiveArtifacts artifacts: 'trivy_repo_report.json', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'trivy-sca-report.json,gitleaks-report.json', allowEmptyArchive: true
         }
         success {
             emailext(
@@ -130,19 +124,20 @@ pipeline {
                     The pipeline **completed successfully**!
                     """,
                     to: "alimsahli.si@gmail.com",
-                    attachmentsPattern: 'trivy_repo_report.json'
+                    attachmentsPattern: 'trivy-sca-report.json,gitleaks-report.json'
             )
         }
 
 
         failure {
+            // This runs only if the pipeline failed.
             emailext(
                     subject: "❌ Pipeline FAILED: ${currentBuild.fullDisplayName}",
                     body: """Hello Team,
                     The pipeline failed. Check the attached Trivy report for details.
                     """,
                     to: "alimsahli.si@gmail.com",
-                    attachmentsPattern: 'trivy_repo_report.json'
+                    attachmentsPattern: 'trivy-sca-report.json,gitleaks-report.json'
 
             )
         }
