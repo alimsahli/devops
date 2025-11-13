@@ -121,9 +121,9 @@ pipeline {
        success {
            emailext(
                    subject: "✅ SUCCESS: Pipeline Completed for ${currentBuild.fullDisplayName}",
-                   body: """<!DOCTYPE html>
-                       <html lang="en">
-                       <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                   body: """
+                   <html>
+                   <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
                            <div style="max-width: 650px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 8px; padding: 25px; background-color: #f9f9f9;">
                                <h2 style="color: #28a745; margin-top: 0;">✅ Pipeline Success!</h2>
                                <p>The build <strong>${currentBuild.fullDisplayName}</strong> completed successfully and passed all security checks.</p>
@@ -139,9 +139,11 @@ pipeline {
                                </p>
                                <p style="margin-top: 20px;">Best regards,<br>The CI/CD System</p>
                            </div>
-                       </body>
-                       </html>""",
-                   to: "alimsahli.si@gmail.com"
+                   </body>
+                   </html>
+                   """,
+                   to: "alimsahli.si@gmail.com",
+                   attachmentsPattern: 'trivy_repo_report.json, gitleaks_report.json'
                )
        }
 
@@ -149,8 +151,8 @@ pipeline {
        failure {
            emailext(
                    subject: "❌ FAILED: Pipeline Failed for ${currentBuild.fullDisplayName}",
-                   body: """<!DOCTYPE html>
-                       <html lang="en">
+                   body: """
+                   <html>
                        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
                            <div style="max-width: 650px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 8px; padding: 25px; background-color: #fff3f3; border-left: 5px solid #dc3545;">
                                <h2 style="color: #dc3545; margin-top: 0;">❌ Pipeline Failure!</h2>
@@ -168,8 +170,9 @@ pipeline {
                                </p>
                                <p style="margin-top: 20px;">Best regards,<br>The CI/CD System</p>
                            </div>
-                       </body>
-                       </html>""",
+                   </body>
+                   </html>
+                   """,
                    to: "alimsahli.si@gmail.com",
 
                    // Attach both files
