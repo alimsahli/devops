@@ -115,26 +115,33 @@ pipeline {
     }
     post {
         always {
-            // This runs after the pipeline completes, regardless of success or failure.
-            echo 'Pipeline finished. Checking status for email...'
+            archiveArtifacts artifacts: 'trivy_repo_report.json', allowEmptyArchive: true,
+            archiveArtifacts artifacts: 'gitleaks-report.json', allowEmptyArchive: true
         }
         success {
-            // This runs only if the pipeline finished with success.
-            mail(
-                to: 'alimsahli.si@gmail.com',
-                subject: "✅ SUCCESS: Pipeline ${env.JOB_NAME} - Build #${env.BUILD_NUMBER}",
-                body: "The build for ${env.JOB_NAME} completed successfully.\nView details here: ${env.BUILD_URL}"
-            )
-        }
-        failure {
-            // This runs only if the pipeline failed.
-            mail(
-                to: 'alimsahli.si@gmail.com', // Multiple recipients separated by comma
-                subject: "❌ FAILURE: Pipeline ${env.JOB_NAME} - Build #${env.BUILD_NUMBER}",
-                body: "The build failed! Please check the console output.\nView details here: ${env.BUILD_URL}"
-            )
-        }
-        // You can also use 'unstable', 'fixed', 'aborted', etc.
-    }
 
+            emailext(
+                    subject: "✅ Pipeline SUCCESS: ${currentBuild.fullDisplayName}",
+                    body: """Hello Team,
+                    The pipeline **completed successfully**!
+                    """,
+                    to: "alimsahli.si@gmail.com"
+                )
+        }
+
+
+        failure {
+            emailext(
+                    subject: "❌ Pipeline FAILED: ${currentBuild.fullDisplayName}",
+                    body: """Hello Team,
+                    The pipeline failed. Check the attached Trivy report for details.
+                    """,
+                    to: "alimsahli.si@gmail.com",
+
+                    // Attach the file using its name relative to the current workspace root.
+                    // This is the most reliable way.
+                    attachmentsPattern: 'trivy_repo_report.json'
+                )
+        }
+    }
 }
