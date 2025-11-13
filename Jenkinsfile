@@ -58,38 +58,72 @@ pipeline {
         stage('DEPENDENCY SCAN (SCA - Trivy via Docker)') {
             steps {
                 script {
-                    // Standardize the internal path to /app for both tools
+                    def reportFile = "trivy-sca-report.json"
+                    def vulnerabilitiesFound = false
 
-                    // 1. EXECUTE TRIVY SCAN (Write to /app/trivy-sca-report.json)
-                    sh '''
-                        docker run --rm \
-                          -v $WORKSPACE:/app \
-                          -w /app \
-                          aquasec/trivy:latest \
-                          fs --severity HIGH,CRITICAL --format json --output trivy-sca-report.json . || true
-                    '''
+                    // 1. EXECUTE TRIVY SCAN (Generate report)
+                    // Note: Keep || true for this command so a scan error doesn't halt the pipeline before reporting.
+                    sh """
+                docker run --rm \\
+                  -v \$WORKSPACE:/app \\
+                  -w /app \\
+                  aquasec/trivy:latest \\
+                  fs --severity HIGH,CRITICAL --format json --output ${reportFile} . || true
+            """
 
-                    // 2. DISPLAY FORMATTED REPORT (Read from /app/trivy-sca-report.json)
-                    sh '''
-                        echo "--- TRIVY VULNERABILITY REPORT (HIGH/CRITICAL) ---"
-                        docker run --rm \
-                          -v $WORKSPACE:/app \
-                          -w /app \
-                          realguess/jq:latest \
-                          jq -r \'
-                            .Results[] | select(.Vulnerabilities) | {
-                                Target: .Target,
-                                Vulnerabilities: [
-                                    .Vulnerabilities[] | select(.Severity == "CRITICAL" or .Severity == "HIGH") | {
-                                        Severity: .Severity,
-                                        VulnerabilityID: .VulnerabilityID,
-                                        PkgName: .PkgName,
-                                        InstalledVersion: .InstalledVersion
-                                    }
-                                ]
+                    // 2. CHECK FOR VULNERABILITIES (Set vulnerabilitiesFound flag)
+                    // Use 'jq -e' to check if the filter finds any HIGH/CRITICAL items.
+                    // 0 = Found (vulnerable), 4 = Not Found (clean).
+                    try {
+                        // Run jq, capture its exit status, and ignore its stdout
+                        def jqExitCode = sh(
+                                returnStatus: true,
+                                script: """
+                        docker run --rm \\
+                          -v \$WORKSPACE:/app \\
+                          -w /app \\
+                          realguess/jq:latest \\
+                          jq -e '.Results[] | .Vulnerabilities[] | select(.Severity == "CRITICAL" or .Severity == "HIGH")' ${reportFile} > /dev/null
+                    """
+                        )
+
+                        if (jqExitCode == 0) {
+                            vulnerabilitiesFound = true
+                            echo "🚨 CRITICAL/HIGH vulnerabilities found! Preparing to fail the stage."
+                        } else {
+                            echo "✅ No CRITICAL or HIGH vulnerabilities found. Stage clean."
+                        }
+                    } catch (Exception e) {
+                        // Handles cases where the jq step fails (e.g., file not found, bad JSON)
+                        echo "Warning: Error during vulnerability check: ${e.getMessage()}"
+                    }
+
+                    // 3. DISPLAY FORMATTED REPORT
+                    sh """
+                echo "--- TRIVY VULNERABILITY REPORT (HIGH/CRITICAL) ---"
+                docker run --rm \\
+                  -v \$WORKSPACE:/app \\
+                  -w /app \\
+                  realguess/jq:latest \\
+                  jq -r '
+                    .Results[] | select(.Vulnerabilities) | {
+                        Target: .Target,
+                        Vulnerabilities: [
+                            .Vulnerabilities[] | select(.Severity == "CRITICAL" or .Severity == "HIGH") | {
+                                Severity: .Severity,
+                                VulnerabilityID: .VulnerabilityID,
+                                PkgName: .PkgName,
+                                InstalledVersion: .InstalledVersion
                             }
-                          \' trivy-sca-report.json
-                    '''
+                        ]
+                    }
+                  ' ${reportFile}
+            """
+
+                    // 4. FAIL STAGE if vulnerabilities were found
+                    if (vulnerabilitiesFound) {
+                        error 'Pipeline stopped due to CRITICAL or HIGH dependency vulnerabilities found by Trivy.'
+                    }
 
                     echo 'Le scan Trivy est terminé. Veuillez consulter les résultats ci-dessus.'
                 }
