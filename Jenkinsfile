@@ -121,7 +121,7 @@ pipeline {
     }
     post {
         always {
-            archiveArtifacts artifacts: 'trivy_repo_report.json,gitleaks-report.json', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'trivy_repo_report.json', allowEmptyArchive: true
         }
         success {
             emailext(
@@ -130,7 +130,7 @@ pipeline {
                     The pipeline **completed successfully**!
                     """,
                     to: "alimsahli.si@gmail.com",
-                    attachmentsPattern: 'trivy_repo_report.json,gitleaks-report.json'
+                    attachmentsPattern: 'trivy_repo_report.json'
             )
         }
 
@@ -142,7 +142,7 @@ pipeline {
                     The pipeline failed. Check the attached Trivy report for details.
                     """,
                     to: "alimsahli.si@gmail.com",
-                    attachmentsPattern: 'trivy_repo_report.json,gitleaks-report.json'
+                    attachmentsPattern: 'trivy_repo_report.json'
 
             )
         }
