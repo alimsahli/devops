@@ -119,7 +119,7 @@ pipeline {
             steps {
                 script {
                     def appContainer
-                    def targetUrl = "http://host.docker.internal:1234"
+                    def targetUrl = "http://172.17.0.1:1234"   // FIX FOR LINUX HOST
 
                     try {
                         echo "Starting application container on host port 1234..."
@@ -128,7 +128,6 @@ pipeline {
                                 script: "docker run -d -p 1234:8080 alimsahlibw/devops:latest"
                         ).trim()
 
-                        // Wait until the app responds
                         echo "Waiting for application to become ready..."
                         retry(5) {
                             sleep 5
@@ -148,7 +147,6 @@ pipeline {
                         -x zap-report.xml \
                         -I
                 """
-                        echo "ZAP scan complete."
 
                     } catch (Exception e) {
                         echo "🚨 ZAP Stage Error: ${e.getMessage()}"
