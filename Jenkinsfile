@@ -128,13 +128,6 @@ pipeline {
         }
 
         stage('IMAGE CREATION') {
-            agent {
-                // Binds the host's docker socket into the agent to allow 'docker build' command execution
-                docker {
-                    image 'maven:3.8.6-jdk-11' // Or any base image you need for shell access
-                    args '-v /var/run/docker.sock:/var/run/docker.sock'
-                }
-            }
             steps{
                 echo "Building image alimsahlibw/devops:latest"
                 sh 'docker build -t alimsahlibw/devops:latest .'
@@ -144,13 +137,6 @@ pipeline {
 
         // --- STAGE 2: DOCKER HUB PUSH ---
         stage('DOCKER HUB PUSH') {
-            agent {
-                // Requires docker socket binding to execute 'docker push'
-                docker {
-                    image 'maven:3.8.6-jdk-11'
-                    args '-v /var/run/docker.sock:/var/run/docker.sock'
-                }
-            }
             steps {
                 // Tagging with a unique build number tag for traceability
                 sh 'docker tag alimsahlibw/devops:latest alimsahlibw/devops:${BUILD_NUMBER}'
