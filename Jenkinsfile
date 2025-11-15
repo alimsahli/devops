@@ -135,11 +135,10 @@ pipeline {
                         echo "Application container ID: ${appContainer}. Target URL for ZAP: ${targetUrl}. Starting ZAP scan..."
 
                         // Run OWASP ZAP Baseline Scan
-                        // FIX: Changed the image name from 'owasp/zap2docker-weekly' to the more reliable and actively maintained 'softwaresecurityproject/zap-baseline'
-                        // -I ensures the ZAP container's exit code is ignored, allowing the pipeline to continue
+                        // FIX: Changing to the recommended image path on the GitHub Container Registry (ghcr.io)
                         sh """
                 docker run --rm -v \${PWD}:/zap/wrk/:rw \\
-                    -t softwaresecurityproject/zap-baseline zap-baseline.py \\
+                    -t ghcr.io/zaproxy/zap-baseline zap-baseline.py \\
                     -t ${targetUrl} \\
                     -g zap-scan-report-summary.html \\
                     -r zap-scan-report.xml \\
