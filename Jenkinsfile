@@ -119,58 +119,55 @@ pipeline {
             steps {
                 script {
                     def appContainer
-                    // Target URL is set to the HOST's port 1234, which maps to the container's 8080
                     def targetUrl = "http://host.docker.internal:1234"
 
                     try {
                         echo "Starting application container on host port 1234..."
-                        // Maps container's internal port 8080 to host's port 1234
                         appContainer = sh(
                                 returnStdout: true,
                                 script: "docker run -d -p 1234:8080 alimsahlibw/devops:latest"
                         ).trim()
 
-                        // Wait for the application to start
-                        sleep 20
-                        echo "Application container ID: ${appContainer}. Target URL for ZAP: ${targetUrl}. Starting ZAP scan..."
-
-                        // NEW: Explicitly log in to Docker Hub before trying to pull the ZAP image
-                        withCredentials([string(credentialsId: 'dockerhub', variable: 'DOCKERHUB_TOKEN')]) {
-                            sh 'echo $DOCKERHUB_TOKEN | docker login -u alimsahlibw --password-stdin'
+                        // Wait until the app responds
+                        echo "Waiting for application to become ready..."
+                        retry(5) {
+                            sleep 5
+                            sh "curl -s -o /dev/null ${targetUrl}"
                         }
 
-                        // Run OWASP ZAP Baseline Scan
-                        // FINAL FIX ATTEMPT: Using the official 'owasp/zap2docker-stable' image from Docker Hub
-                        sh """
-                docker run --rm -v \${PWD}:/zap/wrk/:rw \\
-                    -t owasp/zap2docker-stable zap-baseline.py \\
-                    -t ${targetUrl} \\
-                    -g zap-scan-report-summary.html \\
-                    -r zap-scan-report.xml \\
-                    -I || true
-                """
+                        echo "App ready. Running ZAP Baseline scan..."
 
-                        echo "OWASP ZAP scan finished. Reports saved as zap-scan-report.xml and zap-scan-report-summary.html."
+                        sh """
+                    docker run --rm \
+                      --network=host \
+                      -v ${PWD}:/zap/wrk/:rw \
+                      owasp/zap2docker-weekly:latest \
+                      zap-baseline.py \
+                        -t ${targetUrl} \
+                        -r zap-report.html \
+                        -x zap-report.xml \
+                        -I
+                """
+                        echo "ZAP scan complete."
 
                     } catch (Exception e) {
-                        echo "🚨 Error during ZAP stage: ${e.getMessage()}"
+                        echo "🚨 ZAP Stage Error: ${e.getMessage()}"
                     } finally {
-                        // IMPORTANT: Stop and remove the temporary application container
                         if (appContainer) {
-                            echo "Stopping and removing application container ${appContainer}."
+                            echo "Cleaning up app container…"
                             sh "docker stop ${appContainer}"
                             sh "docker rm ${appContainer}"
                         }
-                        // Also archive the ZAP reports in the post section!
                     }
                 }
             }
         }
 
+
     }
     post {
         always {
-            archiveArtifacts artifacts: 'trivy-sca-report.json,gitleaks-report.json,zap-scan-report-summary.html,zap-scan-report.xml', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'trivy-sca-report.json,gitleaks-report.json,zap-report.html,zap-report.xml', allowEmptyArchive: true
         }
         success {
             emailext(
@@ -179,7 +176,7 @@ pipeline {
                     The pipeline **completed successfully**!
                     """,
                     to: "alimsahli.si@gmail.com",
-                    attachmentsPattern: 'trivy-sca-report.json,gitleaks-report.json,zap-scan-report-summary.html,zap-scan-report.xml'
+                    attachmentsPattern: 'trivy-sca-report.json,gitleaks-report.json,zap-report.html,zap-report.xml'
             )
         }
 
@@ -192,7 +189,7 @@ pipeline {
                     The pipeline failed. Check the attached Trivy report for details.
                     """,
                     to: "alimsahli.si@gmail.com",
-                    attachmentsPattern: 'trivy-sca-report.json,gitleaks-report.json,zap-scan-report-summary.html,zap-scan-report.xml'
+                    attachmentsPattern: 'trivy-sca-report.json,gitleaks-report.json,zap-report.html,zap-report.xml'
 
             )
         }
