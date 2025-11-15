@@ -134,6 +134,11 @@ pipeline {
                         sleep 20
                         echo "Application container ID: ${appContainer}. Target URL for ZAP: ${targetUrl}. Starting ZAP scan..."
 
+                        // NEW: Explicitly log in to Docker Hub before trying to pull the ZAP image
+                        withCredentials([string(credentialsId: 'dockerhub', variable: 'DOCKERHUB_TOKEN')]) {
+                            sh 'echo $DOCKERHUB_TOKEN | docker login -u alimsahlibw --password-stdin'
+                        }
+
                         // Run OWASP ZAP Baseline Scan
                         // FINAL FIX ATTEMPT: Using the official 'owasp/zap2docker-stable' image from Docker Hub
                         sh """
