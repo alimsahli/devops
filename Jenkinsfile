@@ -135,10 +135,11 @@ pipeline {
                         echo "Application container ID: ${appContainer}. Target URL for ZAP: ${targetUrl}. Starting ZAP scan..."
 
                         // Run OWASP ZAP Baseline Scan
+                        // FIX: Changed the image name from 'owasp/zap2docker-weekly' to the more reliable and actively maintained 'softwaresecurityproject/zap-baseline'
                         // -I ensures the ZAP container's exit code is ignored, allowing the pipeline to continue
                         sh """
                 docker run --rm -v \${PWD}:/zap/wrk/:rw \\
-                    -t owasp/zap2docker-weekly zap-baseline.py \\
+                    -t softwaresecurityproject/zap-baseline zap-baseline.py \\
                     -t ${targetUrl} \\
                     -g zap-scan-report-summary.html \\
                     -r zap-scan-report.xml \\
@@ -165,7 +166,7 @@ pipeline {
     }
     post {
         always {
-            archiveArtifacts artifacts: 'trivy-sca-report.json,gitleaks-report.json', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'trivy-sca-report.json,gitleaks-report.json,zap-scan-report-summary.html,zap-scan-report.xml', allowEmptyArchive: true
         }
         success {
             emailext(
@@ -174,7 +175,7 @@ pipeline {
                     The pipeline **completed successfully**!
                     """,
                     to: "alimsahli.si@gmail.com",
-                    attachmentsPattern: 'trivy-sca-report.json,gitleaks-report.json'
+                    attachmentsPattern: 'trivy-sca-report.json,gitleaks-report.json,zap-scan-report-summary.html,zap-scan-report.xml'
             )
         }
 
@@ -187,7 +188,7 @@ pipeline {
                     The pipeline failed. Check the attached Trivy report for details.
                     """,
                     to: "alimsahli.si@gmail.com",
-                    attachmentsPattern: 'trivy-sca-report.json,gitleaks-report.json'
+                    attachmentsPattern: 'trivy-sca-report.json,gitleaks-report.json,zap-scan-report-summary.html,zap-scan-report.xml'
 
             )
         }
