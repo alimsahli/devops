@@ -12,21 +12,18 @@ pipeline {
 
         stage('SECRET SCAN (Gitleaks via Docker)') {
             steps {
-                // Utilise $WORKSPACE au lieu de $PWD ou du chemin codé en dur
                 sh 'docker run --rm -v $WORKSPACE:/app -w /app zricethezav/gitleaks:latest detect --source=. --report-path=gitleaks-report.json --exit-code 0'
             }
         }
         stage('Security Check: Forbidden .env File') {
             steps {
                 script {
-                    // Check for the existence of the .env file in the current workspace directory
+
                     def envFileExists = fileExists('.env')
 
                     if (envFileExists) {
-                        // If the file exists, mark the build as failed and print an error
                         error("🚨 FATAL SECURITY ERROR: The forbidden '.env' configuration file was found in the repository. Please remove it and use Jenkins credentials/secrets instead.")
                     } else {
-                        // If the file is not found, continue the pipeline
                         echo '✅ Security check passed. No forbidden .env file found.'
                     }
                 }
@@ -130,21 +127,88 @@ pipeline {
             }
         }
 
-        //stage('image creation'){
-            //steps{
-                //sh 'docker build -t alimsahlibw/devops .'
-                //sh 'docker image prune -f'
-            //}
-        //}
+        stage('IMAGE CREATION') {
+            agent {
+                // Binds the host's docker socket into the agent to allow 'docker build' command execution
+                docker {
+                    image 'maven:3.8.6-jdk-11' // Or any base image you need for shell access
+                    args '-v /var/run/docker.sock:/var/run/docker.sock'
+                }
+            }
+            steps{
+                echo "Building image alimsahlibw/devops:latest"
+                sh 'docker build -t alimsahlibw/devops:latest .'
+                sh 'docker image prune -f'
+            }
+        }
 
-        //stage('Docker Hub Push') {
-             //steps {
-                 //withCredentials([string(credentialsId: 'dockerhub', variable: 'DOCKERHUB_TOKEN')]) {
-                     //sh 'echo $DOCKERHUB_TOKEN | docker login -u alimsahlibw --password-stdin'
-                     //sh 'docker push alimsahlibw/devops'
-                 //}
-             //}
-        //}
+        // --- STAGE 2: DOCKER HUB PUSH ---
+        stage('DOCKER HUB PUSH') {
+            agent {
+                // Requires docker socket binding to execute 'docker push'
+                docker {
+                    image 'maven:3.8.6-jdk-11'
+                    args '-v /var/run/docker.sock:/var/run/docker.sock'
+                }
+            }
+            steps {
+                // Tagging with a unique build number tag for traceability
+                sh 'docker tag alimsahlibw/devops:latest alimsahlibw/devops:${BUILD_NUMBER}'
+                withCredentials([string(credentialsId: 'dockerhub', variable: 'DOCKERHUB_TOKEN')]) {
+                    sh 'echo $DOCKERHUB_TOKEN | docker login -u alimsahlibw --password-stdin'
+                    sh 'docker push alimsahlibw/devops:latest'
+                    sh 'docker push alimsahlibw/devops:${BUILD_NUMBER}'
+                }
+            }
+        }
+
+        // --- STAGE 3: OWASP ZAP SCAN (DAST) ---
+        stage('OWASP ZAP SCAN (DAST)') {
+            steps {
+                script {
+                    def appContainer
+                    // Target URL is set to the HOST's port 1234, which maps to the container's 8080
+                    def targetUrl = "http://host.docker.internal:1234"
+
+                    try {
+                        echo "Starting application container on host port 1234..."
+                        // Maps container's internal port 8080 to host's port 1234
+                        appContainer = sh(
+                                returnStdout: true,
+                                script: "docker run -d -p 1234:8080 alimsahlibw/devops:latest"
+                        ).trim()
+
+                        // Wait for the application to start
+                        sleep 20
+                        echo "Application container ID: ${appContainer}. Target URL for ZAP: ${targetUrl}. Starting ZAP scan..."
+
+                        // Run OWASP ZAP Baseline Scan
+                        // -I ensures the ZAP container's exit code is ignored, allowing the pipeline to continue
+                        sh """
+                docker run --rm -v \${PWD}:/zap/wrk/:rw \\
+                    -t owasp/zap2docker-weekly zap-baseline.py \\
+                    -t ${targetUrl} \\
+                    -g zap-scan-report-summary.html \\
+                    -r zap-scan-report.xml \\
+                    -I || true
+                """
+
+                        echo "OWASP ZAP scan finished. Reports saved as zap-scan-report.xml and zap-scan-report-summary.html."
+
+                    } catch (Exception e) {
+                        echo "🚨 Error during ZAP stage: ${e.getMessage()}"
+                    } finally {
+                        // IMPORTANT: Stop and remove the temporary application container
+                        if (appContainer) {
+                            echo "Stopping and removing application container ${appContainer}."
+                            sh "docker stop ${appContainer}"
+                            sh "docker rm ${appContainer}"
+                        }
+                        // Also archive the ZAP reports in the post section!
+                    }
+                }
+            }
+        }
 
     }
     post {
