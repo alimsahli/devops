@@ -135,10 +135,10 @@ pipeline {
                         echo "Application container ID: ${appContainer}. Target URL for ZAP: ${targetUrl}. Starting ZAP scan..."
 
                         // Run OWASP ZAP Baseline Scan
-                        // FIX: Changing to the recommended image path on the GitHub Container Registry (ghcr.io)
+                        // FINAL FIX ATTEMPT: Using the official 'owasp/zap2docker-stable' image from Docker Hub
                         sh """
                 docker run --rm -v \${PWD}:/zap/wrk/:rw \\
-                    -t ghcr.io/zaproxy/zap-baseline zap-baseline.py \\
+                    -t owasp/zap2docker-stable zap-baseline.py \\
                     -t ${targetUrl} \\
                     -g zap-scan-report-summary.html \\
                     -r zap-scan-report.xml \\
