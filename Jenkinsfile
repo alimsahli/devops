@@ -3,7 +3,6 @@ pipeline {
 
     stages {
 
-
         stage('MAVEN Build & Test'){
             steps {
                 sh 'mvn clean install'
